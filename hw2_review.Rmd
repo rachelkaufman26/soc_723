@@ -1,0 +1,212 @@
+---
+title: "hw2_review"
+author: "Rachel Kaufman"
+date: "2023-01-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+# Set our ggplot theme from the outset
+theme_set(theme_light())
+# Read in the data 
+gender_employment <- read_csv("Data/gender_employment.csv")
+
+# Glimpse at the data 
+glimpse(gender_employment)
+```
+
+Creating a plot to show womens wages with respect to men over time
+```{r}
+gender_employment %>% 
+  ggplot(aes(x = year, y = wage_percent_of_male)) +
+    geom_jitter(alpha = 0.1) +
+    geom_smooth(method = lm) +
+    labs( tite = "Womens Earnings with Respect to Mens",
+          x = "Year",
+          y = "% of Men's Income")
+```
+
+
+### **Question 1**
+`wage_percent_of_male` is the outcome variable and the explanatory variables are `year` and `major_category`
+
+Starting by using `mutate()` to change our `major_category` of occupations to factors as well as including a reference category for comparison (this should be our intercept-- correct?)
+```{r}
+gender_employment <- gender_employment %>% 
+    mutate(major_category = as.factor(major_category),
+           major_category = relevel(major_category,
+                                    ref = "Management, Business, and Financial"))
+```
+
+Okay, now to create the actual model:
+```{r}
+parallel_model <- lm(data = gender_employment,
+     formula = wage_percent_of_male ~ major_category + year)
+
+library(broom)
+tidy(parallel_model)
+```
+Okay, in terms of describing my models output, my estimates are pretty varied across occupation groups, this aligns with the scatter plot w/ our line of best fit that we produced earlier. There is variation across each `major_category`. My intercept, which is "management, business and financial" is also my reference category, so all interpretations of estimates really do need to be done in comparison to this category! 
+
+In terms of describing the estimate for the year, it seems that a one unit change in year leads to a 0.192 increase change in our outcome which is `wage_percent_of_male`. I am only a tad confused on how to describe this as hour reference is a reference to major_categories. Let me know if I am interpreting this correctly!
+
+Calculating the wage percentage of male income for Sales and Office occupations on 2015.
+wagePM = wage percent male
+occupationSO - sales and office occupations
+My fomula:
+$$ 
+\begin{aligned}
+wagePM_i &\sim Normal(\mu, \sigma)\\
+\mu_i &= \alpha + \beta_1Year(x_i) + \beta_2OccupationSO(x_i) \\
+\end{aligned}
+$$
+Calculating the wage percentage of male income for Sales and Office occupations on 2015.
+```{r}
+-307 + 0.192*2015 + 3.33*1 
+```
+The wage percent of male income for sales and office occupations in 2015 is 83.21 %.
+
+Calculating the wage percentage of male income for Service occupations on 2016.
+```{r}
+-307 + 0.192*2016 + 6.08*1 
+```
+the wage percentage of male income for Service occupations on 2016 is 86.15 % (I hope again lol)
+
+### **Question 2**
+`facet_wrap()` by occupation categories to determine if it was warranted to give these all the same slope.
+```{r}
+gender_employment %>% 
+  ggplot(aes(x = year, y = wage_percent_of_male)) +
+    geom_jitter(alpha = 0.1) +
+    geom_smooth(method = lm) +
+    labs( tite = "Womens Earnings with Respect to Mens",
+          x = "Year",
+          y = "% of Men's Income") +
+  facet_wrap("major_category")
+```
+I want to say that the assumption is OK because the lines do seem to have similar slopes. The only noticeable difference is with Natural Resources, Construction, and Maintenance having a more + slope over time and Service seems to have a very slight negative slope. I am not sure just looking at these and comparing them if I can come to the conclusion the assumption is OK. 
+
+### **Question 3**
+fitting another model that includes an interaction between major_category and year. This will allow the slopes to differ across major categories. Again, use tidy() to get the summary of the results.
+
+```{r}
+interaction_model <-  
+  lm(data = gender_employment,
+       formula = wage_percent_of_male ~ major_category*year)
+
+broom :: tidy(interaction_model)
+```
+
+Calculating estimate for Computer, Engineering, and Science in 2016
+```{r}
+-1.37e3 + 1.00e3 + 7.20e-1*2016 + -4.95e-1*2016
+
+
+-1370 + 1000 + .720*2016 + -.495*2016
+```
+the wage percent of male income for Computer, Engineering, and Science in 2016 is 83.6 %  
+
+Formula for calculating service in 2016:
+$$
+\begin{aligned}
+\mu_i &= \alpha + \beta_9Year(x_i) + \beta_8OccupationSO(x_i) + \beta_16Service*year\\
+\end{aligned}
+$$
+*How do I make the 16 a subscript together?*
+
+Calculating estimate for service in 2016:
+
+```{r}
+-1.37e3 + 7.20e-1*2016 + 2.14e3 + -1.06e+0*2016
+```
+the wage percent of male income for Computer, Engineering, and Science in 2016 is 83.6 % 
+
+These in comparison to our other % from the first `parallel_model` are fairly similar! This would lead me to conclude that setting the model up as an interaction does not leave to substantially different results. So, if the results may not be so different, how can I evaluate which of the two models I would prefer to use? 
+
+## **Question 4** 
+*Given that we have the ability to add interactions to models - i.e. to have slopes vary across categories -, why would we choose to build a model that assumes parallel trends?*
+
+Ya know this is a great question...I would argue that the additional complexity is not necessary, meaning the `parallel_model` would be the best choice of action. I say this because they are very very similar, and last I checked there are penalities associated with additional terms. So, the 15 betas may be less than ideal. It would/will be helpful to directly compare the model outputs.
+```{r}
+parallel_model <- tidy(parallel_model)
+parallel_model
+
+interaction_model <- tidy(interaction_model)
+interaction_model
+```
+I would also add on that the standard errors are a lot larger for the interaction model than the parallel model, which would lead me to the conclusion that the best course of action would be to choose the parallel model. 
+
+### **Question 5**
+
+```{r}
+simple_fit <- 
+  lm(data = gender_employment,
+     formula = wage_percent_of_male ~ year)
+broom ::  tidy(simple_fit)
+simple_fit
+```
+I am going to break this down into teeny tiny basics for myself. So, our intercept exists for when our  x value is 0, so 0 years. That adds up because obviously we do not have a 0 year in the, and that is about forever away (2023 years lol). So, it being -322 doesn't tell us much, but does remind me we are on the correct track. Further, our coefficient for year is 0.201, so this would mean that for every one point increase we see in years, we can anticipate an increase a unit increase of 0.201 (*so 20.1%, correct or is it 0.201%?*) for the wage percent of males.  
+
+```{r}
+gender_employment %>% 
+  select(year, wage_percent_of_male, percent_female) %>% 
+  cor(use = "complete.obs") ##because of NA's 
+```
+
+Now, we are including `percent_female` and summarizing this model :p
+```{r}
+multiple_fit <- 
+  lm(data = gender_employment,
+     formula = wage_percent_of_male ~ year + percent_female)
+multiple_fit
+broom :: tidy(multiple_fit)
+multiple_fit
+```
+So, is this what I anticipated? I think I anticipated some of the variation explained with `percent_female` but it makes sense that its role in terms of magnitude is relatively smaller. *I am fighting the urge to compare the coefficients, but I remember there is a certain reason why... Any ideas?* Without that comparison that I may or may not be allowed to make, when we see a 1 % increase of `percent_female`, then there is an associated increase of 4.25 % of  `wage_percent_of_male` on average. Similarly with year, if we see a 1 unit increase in year we will see a 0.197 unit change for the outcome variable, `wage_percent_of_male`. This could be also described as a 0.197% increase. *Is there a way to describe this unit change coefficient with year in something other than saying unit (excluding when we have outcomes as %)?*
+
+I am wondering if you can say this is a percentage, so, Im going to plop in two different years in the formula to see what is up...
+
+Say the proportion is 1:1, I am going to use 50% as a constant for `percent_female`
+```{r}
+## using .5 for 1:!
+-314 + 0.197*2015 + 0.0425*.5
+-314 + 0.197*2016 + 0.0425*.5
+83.17325 - 82.97625
+
+## using 50 for 1:1
+-314 + 0.197*2015 + 0.0425*50
+-314 + 0.197*2016 + 0.0425*50
+85.277-85.08
+```
+Well it is a percent, but not 19.7% as I incorrectly assumed, it would be literally .197 % (I THINK?) unless I am supposed to convert it to 19.7, honestly, unsure still. 
+
+### **Question 6**
+```{r}
+simple_glanced <- glance(simple_fit)
+multiple_glanced <- glance(multiple_fit)
+simple_glanced$r.squared
+multiple_glanced$r.squared
+```
+Um.... I can conclude that both are very shitty. There is the 0.00057787 r-squared, so this explains .5% variance. The other model, the `multiple_glanced` has a little bity r-squared of 0.0129 which is accounting for 1.29% variance. 
+
+**important note: the more terms you add, the greater your r-squared value increases**
+```{r}
+random_numbers <- rnorm(n = nrow(gender_employment), 
+                        mean = 0, 
+                        sd = 4)
+
+gender_employment$random_noise <- random_numbers
+
+# New model 
+random_fit <- lm(wage_percent_of_male ~ year + percent_female + random_noise, data = gender_employment)
+```
+
+
+
+
+
+
+
