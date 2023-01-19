@@ -1,0 +1,233 @@
+---
+title: "Hw1"
+author: "Rachel Kaufman"
+date: "2023-01-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(dplyr)
+twitch_data <- read_csv("twitchdata-update.csv")
+```
+
+```{r}
+library(janitor)
+
+twitch_data <- clean_names(twitch_data)
+colnames(twitch_data)
+
+```
+
+Q1
+```{r}
+View(twitch_data)
+#looking at the data 
+twitch_data %>% 
+  select(average_viewers, followers)
+#summarizing the data
+twitch_data %>% 
+  select(average_viewers, followers) %>% 
+  summary()
+```
+In terms of what I notice, the range for minimum and maximum followers is incredibly wide distribution, and the mean is a lot higher than the median. As for the average viewers, it is noticeably less than the # of followers. The mean is also higher than the median, with a large distribution in range. Comparing their summary statistics does not tell me much about predictive power, but I can look at a scatter plot to help me out to look at their relationship :)
+
+
+```{r}
+install.packages("hrbrthemes")
+library(hrbrthemes)
+ggplot(twitch_data, aes(average_viewers, followers)) +
+  geom_point(size = 1, color = "blue") +
+  labs(title = "Number of followers and Avg. number of views") 
+```
+There seems to be some sort of correlation, with a few wonky outliers. A lot of the data points are all in the bottom left, meaning they are stacked on each other and difficult to interpret, so log transform will give us a better understanding of the distribution. 
+
+```{r}
+ggplot(twitch_data, aes(average_viewers, followers)) +
+  geom_point(size = 1, color = "blue") +
+  labs(title = "Number of followers and Avg. number of views",
+       x = "logged avg. viewers",
+       y = "logged number of followers") +
+  scale_x_log10() +
+  scale_y_log10() 
+```
+Phew! Looks way better. There definitely seems to be a correlation. 
+
+Adding the transformations as their own new columns to our data set:
+```{r}
+twitch_data <- twitch_data %>% 
+  mutate(log_viewers = log10(average_viewers), 
+         log_followers = log10(followers))
+View(twitch_data)
+```
+
+### **Q2**
+```{r}
+fit1 <- lm(formula = log_viewers~log_followers,
+   data = twitch_data)
+library(broom)
+tidy(fit1)
+##interpret your coefficients
+1.1^{0.588} #1.1 -> is the 10%, this is just transforming the log into % for interpreting
+
+```
+This tells us with that when we see a 10% increase in number of followers, we see a 5.8% increase in average viewers
+
+### **Q3**
+```{r}
+
+##fitted values
+pred_data <- augment(fit1)
+glimpse(pred_data)
+
+pred_data %>% 
+  ggplot(aes(log_followers,
+             log_viewers)) +
+  geom_jitter(alpha = 0.4) +
+  geom_line(aes(x = log_followers,
+                y = .fitted),
+            col = "orange") +
+  theme_minimal() + 
+  labs(title = "Followers and Average Viewership",
+       subtitle = "Fitted model and Raw Data",
+       x = "logged followers",
+       y = "logged avg. viewers")
+           
+```
+This shows us our predicted values given the line of bestfit. 
+
+```{r}
+
+pred_data %>% 
+  ggplot(aes(log_followers,
+             .resid)) +
+  geom_jitter(alpha = 0.4) +
+  theme_minimal() + 
+  labs(title = "Followers and Average Viewership",
+       subtitle = "Residual model and Raw Data",
+       x = "logged followers",
+       y = "residuals")
+```
+So our residuals are pretty clustered [between -0.5 to 0.5] for their range. BUT! The range for our x-axis of logged followers is definitely skewed to the right. So, when logged followers is <5, we are in a sticky situation and predictions will likely suck. 
+
+Q4
+looking at language and avg. viewers. The goal of this is to work with a categorical variable to find predictive values of a continuous variable. Let's look at the raw data...
+```{r}
+
+#lets take a look at the variables we are interested in. 
+twitch_data %>% 
+  select(language, average_viewers)
+
+#i want to be able to look at the # of different languages...
+twitch_data %>% 
+ count(language) %>% 
+  arrange(desc(n))
+```
+So I have got 21 languages, with English having the highest count of 485. 
+
+Lets use `summary()` to look at some descriptive statistics:
+```{r}
+twitch_data %>% 
+  select(language, average_viewers) %>% 
+  summary()
+
+##visualizing language distribution
+ggplot(twitch_data, aes(x = language)) +
+  geom_bar() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Now lets do a cute lil scatter plot which is really going to look like a bar chart bc language is a categorical variable. 
+```{r}
+ggplot(twitch_data, aes(language, average_viewers)) +
+  geom_point() +
+  labs(title = "Language and Average Viewers",
+       y = "average number of viewers") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+SHOCKER! They are all clustered around 0. I need to use the log transformeed variable I set up in 
+
+```{r}
+ggplot(twitch_data, aes(language, log_viewers)) +
+  geom_point() +
+  labs(title = "Language and Average Viewers",
+       y = "logged average number of viewers") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+I don't really see much, but I am not sure what would be helpful in this instance. 
+
+### **Q4**
+```{r}
+#setting English as reference category
+twitch_data <- twitch_data %>% 
+  mutate(language = as.factor(language), 
+         language = relevel(language, ref = "English"))
+
+##changing the values of the languages to #'s
+twitch_data <- twitch_data %>% 
+  mutate(language_factor = case_when(
+         language == "English" ~ 1,
+         language == "Arabic" ~ 2,
+         language == "Chinese" ~ 3,
+         language == "Czech" ~ 4,
+         language == "Finnish" ~ 5,
+         language == "French" ~ 6,
+         language == "German" ~ 7,
+         language == "Greek" ~ 8,
+         language == "Hungarian" ~ 9,
+         language == "Italian" ~ 10,
+         language == "Japanese" ~ 11,
+         language == "Korean" ~ 12,
+         language == "Polish" ~ 13,
+         language == "Portuguese" ~ 14,
+         language == "Russian" ~ 15,
+         language == "Slovak" ~ 16,
+         language == "Spanish" ~ 17,
+         language == "Swedish" ~ 18,
+         language == "Thai" ~ 19,
+         language == "Turkish" ~ 20,
+         language == "Other" ~ 21)
+         )
+ 
+fit2 <-  
+  lm(data = twitch_data,
+     formula = log_viewers ~ language_factor)
+
+
+pred_data2 <- augment(fit2)
+fit2
+View(pred_data2)
+```
+
+```{r}
+pred_data2 %>% 
+  ggplot(aes(language_factor,
+             log_viewers)) +
+  geom_jitter(alpha = 0.4) +
+  geom_line(aes(x = language_factor,
+                y = .fitted),
+            col = "orange") +
+  theme_minimal() + 
+  labs(title = "Languages and Average Viewership",
+       subtitle = "Fitted model and Raw Data",
+       x = "Languages",
+       y = "logged avg. viewers")
+           
+```
+
+### **Question 5**
+```{r}
+
+```
+
+### **Question 6**
+```{r}
+
+```
+
+
