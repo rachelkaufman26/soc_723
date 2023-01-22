@@ -2,7 +2,9 @@
 title: "Hw1"
 author: "Rachel Kaufman"
 date: "2023-01-12"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -23,7 +25,7 @@ colnames(twitch_data)
 
 ```
 
-Q1
+### **Question 1**
 ```{r}
 View(twitch_data)
 #looking at the data 
@@ -38,7 +40,7 @@ In terms of what I notice, the range for minimum and maximum followers is incred
 
 
 ```{r}
-install.packages("hrbrthemes")
+## install.packages("hrbrthemes")
 library(hrbrthemes)
 ggplot(twitch_data, aes(average_viewers, followers)) +
   geom_point(size = 1, color = "blue") +
@@ -65,7 +67,7 @@ twitch_data <- twitch_data %>%
 View(twitch_data)
 ```
 
-### **Q2**
+### **Question 2**
 ```{r}
 fit1 <- lm(formula = log_viewers~log_followers,
    data = twitch_data)
@@ -75,9 +77,9 @@ tidy(fit1)
 1.1^{0.588} #1.1 -> is the 10%, this is just transforming the log into % for interpreting
 
 ```
-This tells us with that when we see a 10% increase in number of followers, we see a 5.8% increase in average viewers
+This tells us with that when we see a 10% increase in number of followers, we see a 5.8% increase in average viewers. 
 
-### **Q3**
+### **Question 3**
 ```{r}
 
 ##fitted values
@@ -98,13 +100,12 @@ pred_data %>%
        y = "logged avg. viewers")
            
 ```
-This shows us our predicted values given the line of bestfit. 
+This shows us our predicted values given the line of best fit. 
 
 ```{r}
-
 pred_data %>% 
-  ggplot(aes(log_followers,
-             .resid)) +
+  ggplot(aes(x = log_followers,
+             y = .resid)) +
   geom_jitter(alpha = 0.4) +
   theme_minimal() + 
   labs(title = "Followers and Average Viewership",
@@ -114,7 +115,7 @@ pred_data %>%
 ```
 So our residuals are pretty clustered [between -0.5 to 0.5] for their range. BUT! The range for our x-axis of logged followers is definitely skewed to the right. So, when logged followers is <5, we are in a sticky situation and predictions will likely suck. 
 
-Q4
+ ### **Question 4**
 looking at language and avg. viewers. The goal of this is to work with a categorical variable to find predictive values of a continuous variable. Let's look at the raw data...
 ```{r}
 
@@ -149,8 +150,7 @@ ggplot(twitch_data, aes(language, average_viewers)) +
        y = "average number of viewers") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
-
-SHOCKER! They are all clustered around 0. I need to use the log transformeed variable I set up in 
+SHOCKER! They are all clustered around 0. I need to use the log transformed variable I set up in one of the earlier questions.  
 
 ```{r}
 ggplot(twitch_data, aes(language, log_viewers)) +
@@ -159,75 +159,50 @@ ggplot(twitch_data, aes(language, log_viewers)) +
        y = "logged average number of viewers") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
-I don't really see much, but I am not sure what would be helpful in this instance. 
+I don't really see much, but I am not sure what would be helpful in this instance. I think any hunch that I would have is basically that Russian and English seem to have some upward bound-esk residuals that I think will definitely pull the model in in terms of these two categories having a larger relative magnitude in comparison to other languages like Thai and Czech, where their spread is smaller in range and both stay below 4 for the logged average number of viewers.
 
-### **Q4**
+
+
+### **Question 5**
 ```{r}
 #setting English as reference category
 twitch_data <- twitch_data %>% 
   mutate(language = as.factor(language), 
          language = relevel(language, ref = "English"))
-
-##changing the values of the languages to #'s
-twitch_data <- twitch_data %>% 
-  mutate(language_factor = case_when(
-         language == "English" ~ 1,
-         language == "Arabic" ~ 2,
-         language == "Chinese" ~ 3,
-         language == "Czech" ~ 4,
-         language == "Finnish" ~ 5,
-         language == "French" ~ 6,
-         language == "German" ~ 7,
-         language == "Greek" ~ 8,
-         language == "Hungarian" ~ 9,
-         language == "Italian" ~ 10,
-         language == "Japanese" ~ 11,
-         language == "Korean" ~ 12,
-         language == "Polish" ~ 13,
-         language == "Portuguese" ~ 14,
-         language == "Russian" ~ 15,
-         language == "Slovak" ~ 16,
-         language == "Spanish" ~ 17,
-         language == "Swedish" ~ 18,
-         language == "Thai" ~ 19,
-         language == "Turkish" ~ 20,
-         language == "Other" ~ 21)
-         )
  
 fit2 <-  
   lm(data = twitch_data,
-     formula = log_viewers ~ language_factor)
+     formula = log_viewers ~ language)
 
 
 pred_data2 <- augment(fit2)
-fit2
+pred_data2
+
+tidy(fit2)
 View(pred_data2)
 ```
-
-```{r}
-pred_data2 %>% 
-  ggplot(aes(language_factor,
-             log_viewers)) +
-  geom_jitter(alpha = 0.4) +
-  geom_line(aes(x = language_factor,
-                y = .fitted),
-            col = "orange") +
-  theme_minimal() + 
-  labs(title = "Languages and Average Viewership",
-       subtitle = "Fitted model and Raw Data",
-       x = "Languages",
-       y = "logged avg. viewers")
-           
-```
-
-### **Question 5**
-```{r}
-
-```
+In terms of what the coefficients tell us, yes Nico your hunch was correct that English has quite the magnitude in comparison to the other languages. For example, when we look at Finnish as a category we can see the decrease by 0.453 log units of viewers in comparison to English viewership. In terms of positive coefficients, we have both Russian, Japanese and Spanish with positive coefficients. This means that in comparison to English they actually saw an increase in logged viewership. So, this kinda says to Nico's hunch wellllllll you were close but not that close because if these are in reference to english that means that they predict more viewership.
 
 ### **Question 6**
 ```{r}
+pred_data2 %>% 
+  ggplot(aes(x = language,
+             y = .resid)) +
+  geom_jitter(alpha = 0.4) +
+  theme_minimal() + 
+  labs(title = "Languages and Average Viewership",
+       subtitle = "Residuals from model",
+       x = "Languages",
+       y = "Residuals") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+
+## looking at my little residuals
+pred_data2 %>% filter(.resid > 1.5)
 
 ```
+So, yes there were quite a few our model missed!BUT the two largest are for English and Russian with logged viewers of 5.17 and 5.10
+
+
 
 

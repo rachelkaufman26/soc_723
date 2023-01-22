@@ -148,7 +148,7 @@ simple_fit <-
 broom ::  tidy(simple_fit)
 simple_fit
 ```
-I am going to break this down into teeny tiny basics for myself. So, our intercept exists for when our  x value is 0, so 0 years. That adds up because obviously we do not have a 0 year in the, and that is about forever away (2023 years lol). So, it being -322 doesn't tell us much, but does remind me we are on the correct track. Further, our coefficient for year is 0.201, so this would mean that for every one point increase we see in years, we can anticipate an increase a unit increase of 0.201 (*so 20.1%, correct or is it 0.201%?*) for the wage percent of males.  
+I am going to break this down into teeny tiny basics for myself. So, our intercept exists for when our  x value is 0, so 0 years. That adds up because obviously we do not have a 0 year in the, and that is about forever away (2023 years lol). So, it being -322 doesn't tell us much, but does remind me we are on the correct track. Further, our coefficient for year is 0.201, so this would mean that for every one point increase we see in years, we can anticipate an increase a unit increase of 0.201% for the wage percent of males.  
 
 ```{r}
 gender_employment %>% 
@@ -179,7 +179,7 @@ Say the proportion is 1:1, I am going to use 50% as a constant for `percent_fema
 ## using 50 for 1:1
 -314 + 0.197*2015 + 0.0425*50
 -314 + 0.197*2016 + 0.0425*50
-85.277-85.08
+85.277 - 85.08
 ```
 Well it is a percent, but not 19.7% as I incorrectly assumed, it would be literally .197 % (I THINK?) unless I am supposed to convert it to 19.7, honestly, unsure still. 
 
