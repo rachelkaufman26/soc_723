@@ -1,0 +1,256 @@
+---
+title: "SR_CH11_HW"
+author: "Rachel Kaufman"
+date: "2023-01-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rethinking)
+library(modelsummary)
+library(brms)
+```
+
+
+
+### **11E1. If an event has probability 0.35, what are the log-odds of this event?**
+```{r}
+log(0.35/(1 - 0.35))
+```
+The log odds are -.619
+
+### **11E2. If an event has log-odds 3.2, what is the probability of this event?**
+```{r}
+exp(3.2)/ (1 + (exp(3.2 )))
+```
+The probability of this event is 96%
+
+### **11E3. Suppose that a coefficient in a logistic regression has value 1.7. What does this imply about the proportional change in odds of the outcome?**
+
+So to figure this out, I have to use e^logodds to calculate the proportional odds. My Coefficient is a log odds value, and doing this is supposed to change it to the rate for that specific coeff. *maybe*
+```{r}
+exp(1.7)
+
+```
+So, this would be the proportional change in odds of the outcome. It's because for any one unit increase in X, the log odds increase by e^logodds (1.7 in this case)
+
+
+
+### **11E4. Why do Poisson regressions sometimes require the use of an offset? Provide an example.**
+
+Well this occurs when the accounts are aggregated over time, but different amounts of time! Meaning they have different exposures. The equation is below:
+$$
+\begin{aligned}
+\ Y_i &\sim Possion(\mu_i)\\
+\ log(\mu_i) &= \alpha + \log(T_i) + \beta(X_i)\\
+\end{aligned}
+$$
+To do this in real time, you are essentially adding the log(T) like you would any new predictor, except this does not create an additional parameter. 
+Basically, in order to fix an offset you just have to multiply the new gamma/rate you are given by whatever  gives you the same outcome as the one you are trying to compare too. McElreath does this with days and weeks, multiplying the gamma from `number_weeks`*7 to have the same count as `number_days`. Then, once you create your possion model, you add the log(Ti) term! You would log the term you are using for your count. So with this example, it would be `days`.
+```{r}
+number_days <- 30
+y <- rpois(number_days, 1.5) #is the true rate 1.5 is our gamma
+number_weeks <- 4
+y_new <- rpois(number_weeks, 0.5*7)
+```
+
+
+### **11M1. As explained in the chapter, binomial data can be organized in aggregated and disaggregated forms, without any impact on inference. But the likelihood of the data does change when the data are converted between the two formats. Can you explain why?**
+So, with the aggregated data, the binomial includes a multiplicative term to account for all the different ways that we could get the observed number of counts. It would be trying to find all the possible outcomes. This is because when the data is in that formatt, the binomial golem is still trying to find the likelihood, and does not know that the terms (when disaggregated) have concrete outcomes. When in doubt, use dissagregated data :0
+
+### **11M2. If a coefficient in a Poisson regression has value 1.7, what does this imply about the change in the outcome?**
+```{r}
+exp(1.7)
+```
+Poisson use the log link, so, a change in the outcome resulting from a 1.7 unit change in the predictor really depends on what else is going on parameters and the scale of the other predictor. We could just look at the proportional odds, similar to the problem above (11E3), getting 5.5 BUT it doesnt mean much without more context. :)
+
+### **11M3. Explain why the logit link is appropriate for a binomial generalized linear model.**
+Because this is count data, it quite literally makes the most sense to log transform eq., using a log link. With this we are trying to relate a linear predictor to the probability of an outcome. This brings in a lot more flexibility for our model (unlike a regular `lm()` function). 
+
+### **11M4. Explain why the log link is appropriate for a Poisson generalized linear model.**
+The log link function is simply crucial again here because BOOM! It confines it to a positive parameter, which is what Possion is sort of used for. That and unknown max counts. 
+
+### **11M5. What would it imply to use a logit link for the mean of a Poisson generalized linear model? Can you think of a real research problem for which this would make sense?**
+I think that the logit link means we definitely need to know our maximum count. So, if this max is super high with a low probability, it would make since to use the logit link.
+
+### **11M6. State the constraints for which the binomial and Poisson distributions have maximum entropy. Are the constraints different at all for binomial and Poisson? Why or why not?**
+This requires a discrete binary outcome as well as a constant probability. The constraints for the binomial regression to have maximum entropy would entail a 0,1 outcome woooo! Both have the need for discrete outcomes but Possion is more limiting as you need a positive integer and will likely have much higher maximums. 
+
+### **11M7. Use quap() to construct a quadratic approximate posterior distribution for the chimpanzee model that includes a unique intercept for each actor, m11.4 (page 330). Compare the quadratic approximation to the posterior distribution produced instead from MCMC. Can you explain both the differences and the similarities between the approximate and the MCMC distributions? Relax the prior on the actor intercepts to Normal(0,10). Re-estimate the posterior using both ulam and quap. Do the differences increase or decrease? Why?**
+Okay, lets estimate these little bestie models.
+```{r}
+set.seed(177)
+data("chimpanzees")
+
+chimp_dat <- chimpanzees %>% 
+  mutate(treatment = 1 + prosoc_left + 2 * condition,
+         treatment = factor(treatment),
+         actor = factor(actor))
+
+dat_list <- list(pulled_left = chimp_dat$pulled_left,
+                 actor = as.integer(chimp_dat$actor),
+                 treatment = as.integer(chimp_dat$treatment))
+
+q11.4 <- quap(alist(pulled_left ~ dbinom(1, p),
+                    logit(p) <- a[actor] + b[treatment],
+                    a[actor] ~ dnorm(0, 1.5),
+                    b[treatment] ~ dnorm(0, 0.5)),
+              data = dat_list)
+
+b11.4 <- brm(bf(pulled_left ~ a + b,
+                a ~ 0 + actor,
+                b ~ 0 + treatment,
+                nl = TRUE), data = chimp_dat, family = bernoulli,
+             prior = c(prior(normal(0, 1.5), class = b, nlpar = a),
+                       prior(normal(0, 0.5), class = b, nlpar = b)),
+             iter = 4000, warmup = 2000, chains = 4, cores = 4)
+
+```
+Looking at the posterior distributions, the quadratic approximation and MCMC are very similar. The only parameter that shows a noticeable difference is Actor 2. Looking a little closer, we see that for Actor 2, MCMC results in a posterior shifted slightly to the right. This is because the MCMC posterior is slightly skewed, whereas the QUAP posterior is forced to be Gaussian. This means more density is given to the lower tail and less to the upper tail than in the MCMC posterior.
+
+Here would be how to visualize this, granted I had to google how to map this out bc I couldn't figure out what to do once I extracted my samples.
+```{r}
+q_samp <- extract.samples(q11.4)
+
+q_draws <- bind_cols(
+  q_samp$a %>% 
+    as_tibble(.name_repair = ~paste0("b_a_actor", 1:ncol(q_samp$a))) %>% 
+    slice_sample(n = 8000) %>% 
+    rowid_to_column(var = ".draw"),
+  q_samp$b %>% 
+    as_tibble(.name_repair = ~paste0("b_b_treatment", 1:ncol(q_samp$b))) %>% 
+    slice_sample(n = 8000)
+) %>% 
+  pivot_longer(-.draw, names_to = "parameter", values_to = "QUAP")
+
+b_draws <- as_draws_df(b11.4) %>% 
+  as_tibble() %>% 
+  select(-lp__) %>% 
+  pivot_longer(cols = -c(.chain, .iteration, .draw),
+               names_to = "parameter", values_to = "MCMC")
+
+post_comp <- full_join(b_draws, q_draws, by = c(".draw", "parameter")) %>% 
+  pivot_longer(cols = c(MCMC, QUAP), names_to = "type") %>% 
+  mutate(parameter = str_replace_all(parameter, "b_[a|b]_([a-z]*)([0-9])",
+                                     "\\1 \\2"),
+         parameter = str_to_title(parameter))
+
+post_comp %>% 
+  ggplot(aes(x = value, color = type)) +
+  facet_wrap(~parameter, nrow = 3) +
+  geom_density(key_glyph = "timeseries") +
+  labs(x = "Value", y = "Density", color = NULL)
+
+post_comp %>% 
+  filter(parameter == "Actor 2") %>% 
+  ggplot(aes(x = value, color = type)) +
+  geom_density(key_glyph = "timeseries") +
+  labs(x = "Actor 2", y = "Density", color = NULL)
+```
+
+
+Now let’s modify our prior distributions. By loosening the prior, we’re letting the actor intercepts take even more extreme values. This should have the effect of letting the posterior become even more skewed.
+
+Here I am modifying my prior distribution (as asked for the next step of this problem). Loosening our prior will lead to the intercept having some wanky silly goose values. This will likley impact the posterior.  
+```{r}
+set.seed(17)
+q11.4_wide <- 
+  quap(
+    data = chimp_dat,
+    alist(pulled_left ~ dbinom(1, p),
+                         logit(p) <- a[actor] + b[treatment],
+                         a[actor] ~ dnorm(0, 10),
+                         b[treatment] ~ dnorm(0, 0.5)))
+
+b11.4_wide <- brm(bf(pulled_left ~ a + b,
+                     a ~ 0 + actor,
+                     b ~ 0 + treatment,
+                     nl = TRUE), data = chimp_dat,
+                  family = bernoulli,
+                  prior = c(prior(normal(0, 10), class = b, nlpar = a),
+                            prior(normal(0, 0.5), class = b, nlpar = b)),
+                  iter = 4000, warmup = 2000, chains = 4, cores = 4)
+```
+Tahhh Dahhhh It did that! shocking. 
+
+MCMC is more skewed but the QUAP posterior is still constrained to be Gaussian. Because of this, QUAP is a pretty bad approximation of the true shape of the posterior.
+(I absolutely googled this code, just saying. I knew that I needed to switch it to pivot longer and I needed to extract my samples to do this first. Got stuck with the slicing of the sample and trying to create a tibble)
+```{r}
+q_samp <- extract.samples(q11.4_wide)
+
+q_draws <- bind_cols(
+  q_samp$a %>% 
+    as_tibble(.name_repair = ~paste0("b_a_actor", 1:ncol(q_samp$a))) %>% 
+    slice_sample(n = 8000) %>% 
+    rowid_to_column(var = ".draw"),
+  q_samp$b %>% 
+    as_tibble(.name_repair = ~paste0("b_b_treatment", 1:ncol(q_samp$b))) %>% 
+    slice_sample(n = 8000)
+) %>% 
+  pivot_longer(-.draw, names_to = "parameter", values_to = "QUAP")
+
+b_draws <- as_draws_df(b11.4_wide) %>% 
+  as_tibble() %>% 
+  select(-lp__) %>% 
+  pivot_longer(cols = -c(.chain, .iteration, .draw),
+               names_to = "parameter", values_to = "MCMC")
+
+post_comp <- full_join(b_draws, q_draws, by = c(".draw", "parameter")) %>% 
+  pivot_longer(cols = c(MCMC, QUAP), names_to = "type") %>% 
+  mutate(parameter = str_replace_all(parameter, "b_[a|b]_([a-z]*)([0-9])",
+                                     "\\1 \\2"), #googled this dude
+         parameter = str_to_title(parameter))
+
+post_comp %>% 
+  filter(parameter == "Actor 2") %>% 
+  ggplot(aes(x = value, color = type)) +
+  geom_density(key_glyph = "timeseries") +
+  labs(x = "Actor 2", y = "Density", color = NULL)
+```
+
+
+### **11M8. Revisit the data(Kline) islands example. his time drop Hawaii from the sample and refit the models. What changes do you observe?**
+Okay, I am fitting the data just like McElreath does in the chapter:
+```{r}
+data("Kline")
+
+kline_dat <- Kline %>% 
+  mutate(P = standardize(log(population)))
+
+no_hawaii <- filter(kline_dat, culture != "Hawaii")
+
+b11.10b <- brm(bf(total_tools ~ a + b * P,
+                  a ~ 0 + contact,
+                  b ~ 0 + contact,
+                  nl = TRUE), data = no_hawaii, family = poisson,
+               prior = c(prior(normal(3, 0.5), class = b, nlpar = a),
+                         prior(normal(0, 0.2), class = b, nlpar = b)),
+               iter = 4000, warmup = 2000, chains = 4, cores = 4)
+
+summary(b11.10b)
+```
+In my model without Hawaii, the slopes are nearly identical!! Clearly different than the chapter, where high and low contact had different slopes which would mean Hawaii was driving the differences! Not too shocking if u ask me. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
