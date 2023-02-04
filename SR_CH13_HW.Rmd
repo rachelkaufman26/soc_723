@@ -1,0 +1,340 @@
+---
+title: "SR_hw13"
+author: "Rachel Kaufman"
+date: "2023-02-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo =  TRUE)
+library(tidyverse)
+library(rethinking)
+```
+
+
+#### **13E1. Which of the following priors will produce more shrinkage in the estimates?**
+The smaller prior, the more of a shrinkage we will see in our estimates! SO, the answer is Normal(0,1).
+
+
+
+#### **13E2. Rewrite the following model as a multilevel model.**
+
+$$
+\begin{aligned} \\
+\ y_i &\sim Binomial(1,pi)  \\
+\ logit(pi) =   \alpha(group[i]) +\alpha(x)_(i)  \\
+\ \alpha(group) &\sim Normal(\alpha(bar),\sigma)  \\
+\ \beta ∼ Normal(0,1)  \\
+\ \alpha(bar) ∼ Normal(0,10)  \\
+\ \alpha\sigma ∼ HalfCauchy(0,1)  \\
+\end{aligned}
+$$
+
+
+#### **13E3. Rewrite the following model as a multilevel model.**
+
+$$
+\begin{aligned}
+y_i &\sim Normal(μ_i, σ) \\
+\ \sigma &\sim Exponential(1) \\
+\ \mu_i =   \alpha[i] + \beta(x)_i \\
+\ \beta &\sim Normal(0, 1) \\
+\ \alpha_[i] &\sim Normal(\alpha(bar), \sigma) \\
+\ \alpha(bar) &\sim  Normal(0, 5) \\ 
+\ \sigma &\sim exp(0,1) \\
+\end{aligned}
+$$
+
+
+#### **13E4. Write a mathematical model formula for a Poisson regression with varying intercepts.**
+
+$$
+\begin{aligned}
+\ y_i &\sim Poisson(\lambda_i) \\
+\ logit(\lambda_i) =   \alpha[i] + \beta(x_i) \\
+\ \alpha[i] &\sim Normal(\alpha(bar), \sigma) \\
+\ \beta &\sim Normal(0,1) \\
+\ \alpha(bar) &\sim Normal(0,1) \\
+\ \sigma_l2 &\sim Exp(0,1) \\
+\end{aligned}
+$$
+
+
+#### **13E5. Write a mathematical model formula for a Poisson regression with two different kinds of varying intercepts, a cross-classified model.**
+
+
+$$
+\begin{aligned}
+\ y_i &\sim Poisson(\lambda_i) \\
+\ logit(\lambda_i) =   a_l1 + a1[i] + a2[i] + beta(x_i) \\
+\ \alpha_l1 &\sim Normal(0, 10) \\
+\ \beta &\sim Normal(0,1) \\
+\ \alpha[i] &\sim Normal(0, \sigma) \\
+\ \alpha[i] &\sim Normal(0, \sigma2) \\
+\ \sigma &\sim HalfCauchy(0,1) \\
+\ \sigma2 &\sim HalfCauchy(0,1) \\
+\end{aligned}
+$$
+
+
+#### **13M1. Revisit the Reed frog survival data, data(reedfrogs), and add the predation and size treatment variables to the varying intercepts model. Consider models with either main effect alone, both main effects, as well as a model including both and their interaction. Instead of focusing on inferences about these two predictor variables, focus on the inferred variation across tanks. Explain why it changes as it does across models.**
+```{r}
+library(rethinking) 
+library(tidyverse)
+library(dplyr)
+data(reedfrogs)
+d <- tibble(reedfrogs)
+d <- d %>% 
+  mutate(tank = 1:nrow(d)) %>% 
+  mutate(big = if_else(size == "big", 1L, 0L)) %>% 
+  mutate(pred = if_else(pred == "no", 0L, 1L)) %>% 
+  mutate(N = density) %>% 
+  mutate(S = surv) %>% 
+  select(S, N, tank, big, pred)
+
+# make model with one main effect alone
+set.seed(1229)
+m13.1a <- ulam( 
+  alist(
+    S ~ dbinom(N, p),
+     logit(p) <- a[tank] + b * big,
+        b ~ dnorm(0, 0.5), 
+   a[tank] ~ dnorm(a_bar, sigma), 
+    a_bar ~ dnorm(0, 1.5),
+    sigma ~ dexp(1)), data = d,
+    chains = 4, log_lik = TRUE)
+
+# make model with both main effect alone
+ 
+m13.1b <- ulam( 
+  alist(
+    S ~ dbinom(N,p),
+      logit(p) <- a[tank] + b * big + x * pred,
+      b ~ dnorm(0, 0.5), 
+      x ~ dnorm(0, 0.5), 
+      a[tank] ~ dnorm(a_bar, sigma), 
+      a_bar ~ dnorm(0, 1.5),
+      sigma ~ dexp(1)), data = d, chains = 4, log_lik = TRUE)
+
+# interaction model
+
+m13.1c  <- ulam( 
+  alist(
+      S ~ dbinom(N,p),
+      logit(p) <- a[tank] + b * big + x * pred + z * big * pred,
+        b ~ dnorm(0, 0.5), 
+        x ~ dnorm(0,0.5),
+        z ~ dnorm(0,0.5),
+        a[tank] ~ dnorm(a_bar, sigma), 
+        a_bar ~ dnorm(0, 1.5),
+        sigma ~ dexp(1)),
+  data = d, chains = 4, log_lik = TRUE)
+
+
+
+
+```
+
+
+#### **13M2. Compare the models you it just above, using WAIC. Can you reconcile the differences in WAIC with the posterior distributions of the models?**
+
+```{r}
+
+precis(m13.1a)
+precis(m13.1b)
+precis(m13.1c)
+compare(m13.1a, m13.1b, m13.1c)
+```
+
+#### **13M3. Re-estimate the basic Reed frog varying intercept model, but now using a Cauchy distribution in place of the Gaussian distribution for the varying intercepts. That is, it this model:**
+on it
+```{r}
+m13m3.base <- ulam(
+  alist(
+    S ~ dbinom(N, p),
+    logit(p) <- a_tank[tank],
+    a_tank[tank] ~ dnorm(a, sigma),
+    a ~ dnorm(0, 1),
+    sigma ~ dexp(1)), 
+  data = d,
+  iter = 2000, chains = 2, cores = 2)
+
+
+
+m13m3.base.cauchy <- ulam(
+  alist(
+    S ~ dbinom(N, p),
+    logit(p) <- a_tank[tank],
+    a_tank[tank] ~ dcauchy(a, sigma),
+    a ~ dnorm(0, 1),
+    sigma ~ dcauchy(0,1)), 
+  data =  d,
+  iter = 2000, chains = 2, cores = 2)
+
+precis(m13m3.base)
+precis(m13m3.base.cauchy, depth = 2)
+
+
+
+```
+
+
+#### **13M4. Now use a Student-t distribution with ν =   2 for the intercepts:**
+**Can you explain the differences?**
+
+```{r}
+m13m4.student <- ulam(
+  alist(
+    S ~ dbinom(N, p),
+    logit(p) <- a_tank[tank],
+    a_tank[tank] ~ dstudent(2, a, sigma),
+    a ~ dnorm(0, 1),
+    sigma ~ dcauchy(0,1)), 
+  data = d,
+  iter = 2000, chains = 2, cores = 2)
+
+precis(m13m4.student, depth = 2)
+```
+
+Compared to the exponential sigma prior, a Cauchy prior for the standard deviation of the residuals is also a heavy-tailed distribution and allows for a wider range of possible values for the standard deviation. The difference between the two is that the exponential prior is defined over positive real numbers only, while the Cauchy prior is defined over the entire real line. This means that the Cauchy prior is less restrictive in terms of the range of possible values for the standard deviation, but also has a heavier tail, which makes it more sensitive to outliers.
+
+In comparison to the original model, the Student-t distribution with ν=2 and the Cauchy prior allow for a wider range of possible values for the intercept and standard deviation, respectively, which makes the posterior less sensitive to the choice of prior. However, it also means that the posterior is more influenced by the data and less influenced by prior beliefs.
+
+#### **13M6. Sometimes the prior and the data (through the likelihood) are in conflict, because they concentrate around different regions of parameter space. What happens in these cases depends a lot upon the shape of the tails of the distributions.202 Likewise, the tails of distributions strongly influence can outliers are shrunk or not towards the mean. I want you to consider four different models to it to one observation at y =   0. he models differ only in the distributions assigned to the likelihood and prior. Here are the four models:**
+```{r}
+data(chimpanzees)
+dchimp <- chimpanzees %>% 
+  drop_na()
+
+m13m6.1 <- ulam(
+  alist(
+    pulled_left ~ dnorm(mu, 1),
+    mu~dnorm(10,1)), 
+  data = dchimp,
+ iter = 2000, chains = 1, cores = 1) 
+
+
+
+m13m6.2 <- ulam(
+  alist(
+    pulled_left ~ dstudent(2, mu, 1),
+    mu~dnorm(10,1)), 
+  data = dchimp,
+  iter = 2000, chains = 1, cores = 1)
+
+m13m6.3 <- ulam(
+  alist(
+    pulled_left ~ dnorm(mu, 1),
+    mu~dstudent(2,10,1)), 
+  data = dchimp,
+  iter = 2000, chains = 1, cores = 1)
+
+m13m6.4 <- ulam(
+  alist(
+    pulled_left ~ dstudent(2,mu, 1),
+    mu~dstudent(2,10,1)), 
+  data = dchimp,
+  iter = 2000, chains = 1, cores = 1)
+
+precis(m13m6.1)
+precis(m13m6.2)
+precis(m13m6.3)
+precis(m13m6.4)
+
+
+```
+
+#### **14E1. Add to the following model varying slopes on the predictor x.**
+No idea why this is not showing up sigh
+$$
+\begin{align}
+\ y(i) &\sim Normal(\mu_(i), \sigma) \\
+\ \mu_i = \alpha_[group[i]] + \beta(x_i) \\
+\ \alpha_[group] &\sim Normal(\alpha, \sigma_[\alpha] \\
+\ \alpha &\sim Normal(0, 10) \\
+\ \beta &\sim Normal(0, 1) \\
+\ \sigma &\sim Exponential(1) \\
+\ \sigma_(\alpha) &\sim Exponential(1) \\
+\end{algin}
+$$
+
+#### **14E2. think up a context in which varying intercepts will be positively correlated with varying slopes. Provide a mechanistic explanation for the correlation.**
+Suppose there is a clothing store with varying slopes predicting sales, and that they will have positive correlations. This store is in different regions with varying climates, as a result, it only makes sense that the sales of winter clothing in a region with a cold climate is much higher than in a region with a warm climate. The intercept for the cold climate region will be higher than the intercept for the warm climate region, and the slope for the cold climate region will be steeper than the slope for the warm climate region. This relationship between the intercepts and slopes reflects the influence of climate on the sales of winter clothing.
+
+#### **14E3. When is it possible for a varying slopes model to have fewer effective parameters (as estimated by WAIC or PSIS) than the corresponding model with fixed (unpooled) slopes? Explain.**
+Varying slopes model CAN have fewer effective parameters (as estimated by WAIC or PSIS) than the corresponding model with fixed (unpooled) slopes when the data is better described by the model with varying slopes, i.e., the varying slopes model is a better fit to the data. The purpose of WAIC and PSIS is to measure the amount of information lost by using a particular model to describe the data. If a model with varying slopes is a better fit to the data, it will result in less information loss and therefore have a lower WAIC or PSIS value compared to a model with fixed slopes (even with more parameters heeh). This suggests that the model with varying slopes has a more parsimonious structure... ooo lala, thus provides a better explanation of the data with fewer parameters.
+
+#### **14M1. Repeat the café robot simulation from the beginning of the chapter. his time, set rho to zero, so that there is no correlation between intercepts and slopes. How does the posterior distribution of the correlation reflect this change in the underlying simulation?**
+
+```{r}
+set.seed(1676)
+a <- 3.5 # average morning wait time
+b <- (-1) # average difference afternoon wait time
+sigma_a <- 1 # std dev in intercepts
+sigma_b <- 0.5 # std dev in slopes
+rho <- 0 # correlation between intercepts and slopes
+
+Mu <- c(a, b)
+cov_ab <- sigma_a * sigma_b * rho
+Sigma <- matrix(c(sigma_a^2, cov_ab, cov_ab, sigma_b^2), ncol = 2)
+
+# simulate observations
+N_cafes <- 20
+set.seed(6)
+vary_effects <- rnorm(N_cafes, Mu, Sigma)
+a_cafe <- vary_effects[ 1]
+b_cafe <- vary_effects[ 2]
+
+N_visits <- 10
+afternoon <- rep(0:1, N_visits * N_cafes / 2)
+cafe_id <- rep(1:N_cafes, each = N_visits)
+mu <- a_cafe[cafe_id] + b_cafe[cafe_id]*afternoon
+sigma <- 0.5 # std dev within cafes
+wait <- rnorm(N_visits * N_cafes, mu, sigma)
+
+# package into  data frame
+d3 <- data.frame(cafe = cafe_id, afternoon = afternoon, wait = wait)
+
+m14.M1 <- ulam(
+  alist(
+    wait ~ normal(mu, sigma),
+    mu <- a_cafe[cafe] + b_cafe[cafe] * afternoon,
+    c(a_cafe, b_cafe)[cafe] ~ multi_normal(c(a, b), Rho, sigma_cafe),
+    a ~ normal(5, 2),
+    b ~ normal(-1, 0.5),
+    sigma_cafe ~ exponential(1),
+    sigma ~ exponential(1),
+    Rho ~ lkj_corr(2)),
+  data = d3, chains = 4, cores = 4)
+
+post2 <- extract.samples(m14.M1)
+
+#plotting
+
+dens(post2$Rho[,1,2])
+
+```
+In the cafe robot simulation, setting rho = 0 means that the intercept of the robot's response time for each cafe would not depend on the slope of the robot's response time for the same cafe. This would result in a posterior distribution of the correlation that is centered near zero and with a small spread, indicating that there is little to no relationship between the intercepts and slopes.
+
+The posterior distribution of the correlation would show that changes in the intercepts of the robot's response time are not related to changes in the slopes, and vice versa. This is a reflection of the underlying simulation where the intercepts and slopes are independent from each other.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
