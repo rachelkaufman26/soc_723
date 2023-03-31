@@ -1,0 +1,257 @@
+---
+title: "Fixed_effects_hw"
+author: "Rachel Kaufman"
+date: "2023-03-24"
+output: html_document
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
+library(readr)
+library(tidyverse)
+library(Statamarkdown)
+library(car)
+library(fixest)
+library(modelsummary)
+library(lme4)
+```
+
+Follow the below instructions and turn in both your code and results:
+
+##### **1. Load the `mathpnl.csv` data file provided (in R or Python store it as `mp`), which comes from Leslie Papke and consists of data at the school district level, and was featured in the Wooldridge (2010) textbook. **
+
+```{r}
+mathpnl <- read_csv("Documents/soc_723/mathpnl.csv")
+View(mathpnl)
+mp <- mathpnl
+```
+
+We are only going to be working with a few variables. Limit the data to these variables:
+   - distid: the district identifier (our "individual" for fixed effects)
+   - year: the year the data is from
+   - math4: the percentage of 4th grade students who are "satisfactory" or better in math
+   - expp: expenditure per pupil
+   - lunch: the percentage of students eligible for free lunch
+
+```{r}
+mp <- mp %>% 
+  select(distid, year, math4, expp, lunch)
+
+```
+
+   
+##### **2. Panel data is often described as "N by T". That is, the number of different individuals N and the number of time periods T. Write code that outputs what N and T are in this data.**
+```{r}
+unique(mp[c("year")]) %>% length()
+unique(mp[c("distid")]) %>% length()
+
+```
+
+*Language-specific instructions*: 
+
+- This will entail counting the number of unique values of your individual and time identifiers. In R try `unique()` to get the unique values and `length()` to count how many there are
+
+##### **3. A *balanced* panel is one in which each individual shows up in every single time period.** You can check whether a data set is a balanced panel by seeing whether the number of unique time periods each individual ID shows up in is the same as the number of unique time periods, or whether the number of unique individual IDs in each time period is the same as the total number of unique individual IDs. Think to yourself a second about why these procedures would check that this is a balanced panel. Then, check whether this data set is a balanced panel.
+```{r}
+mp %>%
+  select(distid, year) %>%
+  unique() %>%
+  pull(year) %>%
+  table()
+```
+LOOKS BALANCED TO ME!
+
+
+##### **4. Run an OLS regression, with no fixed effects, of `math4` on `expp` and `lunch`. Store the results as `m1`.**
+
+```{r}
+m1 <- lm(math4 ~ expp + lunch,
+         data = mp)
+m1
+```
+
+
+
+##### **5. Modify the model in step 4 to include fixed effects for `distid` "by hand". That is, subtract out the within-`distid` mean of `math4`, `expp`, and `lunch`, creating new variables `math4_demean`, `expp_demean`, and `lunch_demean`, and re-estimate the model using those variables, storing the result as `m2`. **
+```{r}
+mp <- mp %>% 
+  mutate(math4_demean = math4 - mean(math4),
+         expp_demean = expp - mean(expp),
+         lunch_demean = lunch - mean(lunch))
+
+m2 <- lm(math4_demean ~ expp_demean + lunch_demean,
+         data = mp)
+m2
+```
+
+(tip: be careful that your code doesn't overwrite the original variables, or at least if it does, reload the data afterwards)
+
+##### **6. Next we're going to estimate fixed effects by including `distid` as a set of dummies. This can be extremely slow, so for demonstration purposes use only the first 500 observations of your data (don't get rid of the other observations, though, you'll want them for the rest of this assignment). Run the model from step 4 but with dummies for different values of `distid`, saving the result as `m3`. Then, do a joint F test on the dummies (see Chapter 13), and report if you can reject that the dummies are jointly zero at the 99% level.**
+
+
+```{r}
+m3 <- lm(math4 ~ expp + lunch + factor(distid), #to treat distid as a cat variable
+         data = mp %>% slice(1:500))
+
+##Joint F test
+linearHypothesis(m3, matchCoefs(m3,'distid'))
+```
+We can definitely reject that the fixed effects are at 0 jointly at the 99% level.
+
+##### **7. Now we will use a specially-designed function to estimate a model with fixed effects. (Using the whole data set once again), use `feols()` from the *fixest* package in R to estimate the model from step 4 but with fixed effects for `distid`. Save the result as `m4`. Include standard errors clustered at the `distid` level.**
+```{r}
+m4 <- feols(math4 ~ expp + lunch | distid,
+            data = mp)
+m4
+```
+
+
+##### **8. Now add fixed effects for year to your model from step 7 to create a two-way fixed effects model. Keep the standard errors clustered at the `distid` level. Save the results as `m5`.**
+
+```{r}
+m5 <- feols(math4 ~ expp + lunch | distid + year,
+            data = mp)
+m5
+```
+
+##### **9. Using `modelsummary()` from **modelsummary** in R make a regression table including `m1` through `m5` in the same table so you can compare them all. Read the documentation of your command to figure out how to include the `expp`, `lunch`, `expp_demean`, and `lunch_demean` predictors in the table without clogging the thing up with a bunch of dummy coefficients from `m3`.
+```{r}
+list_models <- list(m1, m2, m3, m4, m5)
+
+modelsummary(list_models, coef_omit = 'distid',
+             stars = c('*' = .1,'**' = .05,'***' = .01))
+```
+Model 5 with two-way fixed effects does not have any significant coefficients! Models 1 & 2 have the same coefficients for expp and lunch! Even as we included our fixed effects by hand. I am confused as to *why model 3 does not have similar intercepts (they are very close!)
+Write down two interesting things you notice from the table. Multiple possible answers here.
+
+
+##### **10.** Finally, we'll close it out by using correlated random effects instead of fixed effects (see 16.3.3). You already have `expp_demean` and `lunch_demean` from earlier. Now, modify the code from that slightly to add on `expp_mean` and `lunch_mean` (the mean within `distid` instead of the value *minus* that mean). Then, regress `math4` on `expp_demean`, `lunch_demean`, `expp_mean`, and `lunch_mean`, with random effects for `distid` using `lmer()` from *lme4* in R. Show a summary of the regression results.
+```{r}
+mp <- mp %>% 
+  mutate(distid_factor = factor(distid)) %>% 
+  group_by(distid) %>%
+  mutate(expp_mean = mean(expp),
+         lunch_mean = mean(lunch))
+
+m6 <- lmer(math4 ~ (1|distid_factor)
+           + expp_demean + lunch_demean + expp_mean + lunch_mean,
+           data = mp)
+
+modelsummary(m6)
+```
+
+Why did I get get a warning measure for predictor variable being on very different scales?
+```{r}
+library(dplyr)
+library(datawizard)
+
+mp.2 <- standardize(mp$math4, mp$expp_demean, mp$lunch_demean) 
+
+m7 <- lmer(math4 ~ (1|distid_factor)
+           + expp_demean + lunch_demean + expp_mean + lunch_mean,
+           data = mp.2)
+modelsummary(m7)
+```
+- In R, `lmer()` has a hard time with numeric variables as categorical indicators. Create a new, factor version of `distid` directly in the data before running the model, and use that instead.
+
+
+### **Conceptual Questions**
+##### **Question 1**
+**1a**  Between variation
+Okay so if Zach takes 3, 5, and 7 vacations and Skylar takes 2, 6, and 10-- The mean number of vacations is 5 for Zac and 6 for Skylar so the between variation is 1!
+**1b** Within variation
+-2, 2, 0 for Zac’s within variation and -4, 0, 4 would be the within variation for Skylar 
+
+**1c.**	 A vacation increases Zac’s happiness by 1 “happiness point,” but it increases Skylar’s happiness by 2 “happiness points.” Will our fixed effects estimate likely give us an answer closer to 1, closer to 2, or exactly 1.5?
+Okay! So, bc of variance weighting, we see more variance for our bestie Skylar who has 2 happiness points and a median of 6 vacays, so it will likely be closer to 2!
+
+##### **Question 2.**
+You are interested in the effect of cultural events on the levels of trust in a city. Perhaps big events like concerts bring people together and they can trust each other more. You plan to look at the relationship between trust and number of events in a given year, with fixed effects for city. Draw a causal diagram for this research question with at least four back door paths. Which paths will be closed by fixed effects, and which will remain open?
+```{r}
+library(ggdag)
+library(tidyverse)
+dag_coords <-
+  tibble(
+    name = c("CityLevelGDP", "M", "D", "H", "CulturalEvents", "Trust"),
+    x = c(2, 5, 3.5, 5, 1, 8),
+    y = c(4,4,6,6,1,1)
+  )
+DagQ2 <-
+  dagify(Trust ~ CulturalEvents, Trust ~ H, CulturalEvents ~ H, Trust ~ CityLevelGDP, CulturalEvents ~ CityLevelGDP, Trust ~ CityLevelGDP, CulturalEvents ~ D, CulturalEvents ~ M, Trust ~ M,
+    coords = dag_coords) %>%
+  ggplot(aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_dag_point(color = "blue4", alpha = 1 / 4, size = 12) +
+  geom_dag_text(color = "black") +
+  geom_dag_edges(edge_color = "blue4") +
+  scale_x_continuous(NULL, breaks = NULL, expand = c(0.1, 0.1)) +
+  scale_y_continuous(NULL, breaks = NULL, expand = c(0.2, 0.2)) +
+  theme_bw() +
+  labs(
+    title = "Q2")
+DagQ2
+```
+Using fixed effects would close `CityLevelGDP`, `D` (diversity) and `H` (history), but not the rate of crime, `MonthlyCrime`, that is also varying over time.
+
+##### **Question 3.**
+Classify each of the following forms of variation as “between variation”, “within variation”, or a combination of both. 
+a. Within
+b. Within and Between
+c. Within and Between
+d. between
+e. Within
+f. Within and Between
+
+##### **Question 4.**
+Why does the process of taking each observation relative to its individual-level mean have the effect of “controlling for individual”? 
+Because when you use the individual-level mean you are essentially adjusting for anything that remains constant overtime for that individual, so you can see where variation exists within the individual. This lets us remove any unobservable characteristics that may be contributing to the effect. 
+ 
+##### **Question 1.**
+You are interested in the effect of cultural events on the levels of trust in a city. You run a regression of trust levels (on a 0-100 scale) on the number of cultural events with city fixed effects and get a coefficient on cultural events of 3.6. Assume that there are still some back doors open, so do not interpret the result causally. Interpret the 3.6, explaining it in an English sentence. 
+A coefficient of 3.6 indicates that for a any given city, when we estimate/see that cultural events are 1-unit higher than where it is normally we would predict trust to be 3.6 points higher than it is expected to be otherwise. 
+
+##### **Question 2.**
+You are interested in the effect of cultural events on the levels of trust in a city. You run a regression of trust levels (on a 0-100 scale) on the number of cultural events with city and year fixed effects and get a coefficient on cultural events of 2.4. Assume that there are still some back doors open, so do not interpret the result causally. Interpret the 2.4, explaining it in an English sentence.
+the coefficient of 2.4 indicates that for a given city in a given year when cultural events are 1-unit higher (whatever that "unit" means) then we would predict trust to be 2.4 points higher than it typically is.
+
+#####**Question 3.**	
+Two-way fixed effects with terms for both individual and time are often referred to as “controlling for individual and time effects”. Why might a researcher want to do this rather than just taking individual fixed effects and adding a linear/polynomial/etc. term for time?
+It might be the case that year effects are wildly variable and any functional form would risk not accounting for it.
+
+
+##### **Question 4.**	
+Which of the following explains why random effects is likely to do a better job of estimating the individual-level effects than fixed effects, if its assumptions hold?
+**c.	Because it uses the information from the entire data set to estimate each individual effect, rather than relying on only a few observations per individual.**
+As (c) suggests, this helps the model use the information from the entire data set.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
